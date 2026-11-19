@@ -1,0 +1,81 @@
+1. Install the Python requirements
+- Run this on your Ubuntu Nginx server:
+
+sudo apt update
+sudo apt install -y python3 python3-venv
+mkdir -p ~/valhalla-monitor
+cd ~/valhalla-monitor
+python3 -m venv venv
+source venv/bin/activate
+pip install python-a2s
+
+
+- Create python check script
+cd ~/valhalla-monitor
+
+nano status_service.py
+Add from file status_service.py
+
+
+2. Create a systemd service
+- This makes the monitor start automatically whenever Ubuntu boots.
+nano /etc/systemd/system/valhalla-monitor.service
+
+========= Below this line ===================
+
+[Unit]
+Description=Valhalla Calling DayZ Server Monitor
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/root/valhalla-monitor
+ExecStart=/root/valhalla-monitor/venv/bin/python /root/valhalla-monitor/status_service.py
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
+
+==========To here ===================
+
+
+- Enable and start it:
+systemctl daemon-reload
+systemctl enable --now valhalla-monitor
+
+
+- Check its status:
+systemctl status valhalla-monitor
+
+
+3. Test the JSON endpoint
+Run:
+curl http://127.0.0.1:8090/api/status
+
+- You should receive JSON containing all four servers, including their status, player counts, map names, ping and BattleMetrics links.
+- You can also format the output using:
+curl -s http://127.0.0.1:8090/api/status | python3 -m json.tool
+
+
+
+4. Connect Nginx
+- Inside your existing Nginx website's server configuration, add:
+
+location /api/ {
+    proxy_pass http://127.0.0.1:8090;
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+}
+
+
+- Then test and reload Nginx:
+nginx -t
+systemctl reload nginx
+
+
+- Your public website will then be able to retrieve the status from:
+
+https://your-domain.example/api/status
